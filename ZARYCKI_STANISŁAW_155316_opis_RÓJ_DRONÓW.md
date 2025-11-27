@@ -1,5 +1,7 @@
 ## Link do repozytorium: <https://github.com/StaZarycki/PK_SO_PROJECT_DRONE_SWARM>
 
+# Opis
+
 Rój autonomicznych dronów liczy początkowo N egzemplarzy. Drony startują (i lądują) z ukrytej
 platformy (bazy) na której w danym momencie może znajdować się co najwyżej P (P<N/2) dronów.
 Dron, który chce wrócić do bazy, musi wlecieć przez jedno z dwóch istniejących wejść. Wejścia te są
@@ -24,3 +26,33 @@ baterii jest niższy niż 20% dron ignoruje sygnał3.
 Napisz program dowódcy sytemu, operatora i drona, tak by zasymulować cykl życia roju dronów.
 Każdy z dronów jest utylizowany (wycofany z eksploatacji) po pewnym określonym czasie Xi, liczonym
 ilością ładowań (pobytów w bazie). Raport z przebiegu symulacji zapisać w pliku (plikach) tekstowym.
+
+# Testy
+
+## Testy bazy
+
+- Czy w bazie zawsze znajduje się co najwyżej N/2 dronów?
+- Czy w danej chwili ruch w wejściu do bazy odbywa się tylko w jedną stronę?
+- Czy drony nie siedzą w bazie zbyt długo (przegrzanie baterii)?
+
+## Testy dronów
+
+- Czy drony nie latają dłużej, niż 2.5 \* T1i (T2i)?
+- Czy przy poziomie baterii poniżej 20% drony kierują się do bazy?
+- Czy po tym, gdy bateria spada do 0%, dron jest niszczony (usuwany)?
+
+## Testy operatora
+
+- Czy operator co czas Tk uzupełnia braki w liczbie dronów?
+- Czy operator nie uzupełnia dronów powyżej dopuszczalnej ilości?
+
+## Testy dowódcy
+
+- Czy sygnał3 powoduje zniszczenie drona?
+    - Czy dron zignoruje sygnał3, jeśli ma poniżej 20% naładowania baterii?
+
+## Testy platform
+
+- Czy sygnał1 dodaje platformę?
+- Czy sygnał2 odejmuje platformę?
+- Czy każda platforma podwaja maksymalną ilość dronów?
