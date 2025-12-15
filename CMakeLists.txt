@@ -4,11 +4,17 @@ project(ProjectDrone VERSION 1.0)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/build/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/build/lib")
 
-set(SOURCE_FILES src/main.c)
+set(SOURCE_FILES
+  src/main.c
+  src/utils.c
+
+  include/utils.h
+)
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
@@ -20,5 +26,5 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-  ${PROJECT_SOURCE_DIR}/src
+  ${PROJECT_SOURCE_DIR}/include
 )
