@@ -1,4 +1,22 @@
-.idea
-.cache
+build/
+out/
+bin/
+lib/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
 
-build
+.vscode/
+.idea/
+.vs/
+*.swp
+*.swo
+.DS_Store
+
+compile_commands.json
+.clangd/
+.cache/
+
+.cmake-tools.json
