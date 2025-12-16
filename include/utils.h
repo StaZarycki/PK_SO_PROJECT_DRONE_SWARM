@@ -1,3 +1,3 @@
 #pragma once
 
-void print_hello(void);
+int parse_int(char *num_char);
