@@ -1,3 +1,4 @@
+#include "drone_manager.h"
 #include "utils.h"
 #include <stdio.h>
 
@@ -8,9 +9,13 @@ int main(int argc, char *argv[]) {
     drone_amount = parse_int(argv[1]);
     if (drone_amount == -1)
       return 1;
+  } else {
+    drone_amount = 150;
   }
 
   printf("Drone amount: %d\n", drone_amount);
+
+  spawn_drones(drone_amount);
 
   return 0;
 }
