@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-int main(int argc, char *argv[]) {
-  if (argc < 2) {
+int main(int argc, char *argv[])
+{
+  if (argc < 2)
+  {
     perror(
         "There are not enough arguments.\nWas the process spawned correctly?");
     return 1;

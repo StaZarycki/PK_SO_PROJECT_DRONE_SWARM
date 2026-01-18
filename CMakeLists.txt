@@ -1,88 +1,36 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(ProjectDrone VERSION 1.0)
+project(drone_swarm C)
 
-set(CMAKE_C_STANDARD 17)
-set(CMAKE_C_STANDARD_REQUIRED TRUE)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+add_compile_options(-Wall -Wextra -g -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=600)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/build/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/build/lib")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# Library
+find_package(Threads REQUIRED)
 
-add_library(common_lib STATIC
-  src/utils.c
-
-  include/utils.h
+set(COMMON_SOURCES
+    src/utils.c
 )
 
-target_include_directories(common_lib PUBLIC
-  ${PROJECT_SOURCE_DIR}/include
+# --- Main ---
+add_executable(drone_swarm
+    src/main.c
+    src/drone_manager.c
+    src/base_manager.c
+    src/commander_manager.c
+    src/operator_manager.c
+    src/platform_manager.c
+    ${COMMON_SOURCES}
 )
+target_include_directories(drone_swarm PRIVATE include)
+target_link_libraries(drone_swarm PRIVATE Threads::Threads m)
 
-target_compile_options(common_lib PRIVATE
-  -Wall -Wextra -pedantic
-  $<$<CONFIG:Debug>:-g>
-)
-
-# Drone
-
+# --- Drone worker ---
 add_executable(drone_worker
-  src/drone_worker.c
+    src/drone_worker.c
+    ${COMMON_SOURCES}
 )
-
-target_link_libraries(drone_worker PRIVATE
-  common_lib
-  rt
-  pthread
-)
-
-target_compile_options(drone_worker PRIVATE
-  -Wall -Wextra -pedantic
-  $<$<CONFIG:Debug>:-g>
-)
-
-# Main
-
-add_executable(${PROJECT_NAME}
-  src/main.c
-  src/drone_manager.c
-
-  include/drone_manager.h
-)
-
-target_link_libraries(${PROJECT_NAME} PRIVATE
-  common_lib
-  rt
-  pthread
-)
-
-target_compile_options(${PROJECT_NAME} PRIVATE
-  -Wall
-  -Wextra
-  -pedantic
-  $<$<CONFIG:Debug>:-g>
-)
-
-# set(SOURCE_FILES
-#   src/main.c
-#   src/utils.c
-#   src/drone_manager.c
-#
-#   include/utils.h
-#   include/drone_manager.h
-# )
-#
-# add_executable(${PROJECT_NAME} ${SOURCE_FILES})
-#
-# target_compile_options(${PROJECT_NAME} PRIVATE
-#   -Wall
-#   -Wextra
-#   -pedantic
-#   $<$<CONFIG:Debug>:-g>
-# )
-#
-# target_include_directories(${PROJECT_NAME} PRIVATE
-#   ${PROJECT_SOURCE_DIR}/include
-# )
+target_include_directories(drone_worker PRIVATE include)
+target_link_libraries(drone_worker PRIVATE Threads::Threads m)
