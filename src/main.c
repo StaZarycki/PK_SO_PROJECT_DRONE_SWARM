@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define DEFAULT_DRONE_AMOUNT 150
+
 int main(int argc, char *argv[])
 {
   int drone_amount = 0;
@@ -18,7 +20,7 @@ int main(int argc, char *argv[])
   }
   else
   {
-    drone_amount = 150;
+    drone_amount = DEFAULT_DRONE_AMOUNT;
   }
 
   spawn_drones(drone_amount);
