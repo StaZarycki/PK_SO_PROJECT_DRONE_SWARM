@@ -1,15 +1,41 @@
 #include "operator_manager.h"
 #include "drone_manager.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+
 Base base;
 
+void handle_signal(int sig)
+{
+  if (sig == SIG_ADD_PLATFORM)
+  {
+    char buffer[100];
+
+    int len = sprintf(buffer, "Adding a platform\n");
+    write(STDOUT_FILENO, buffer, len);
+    add_platform();
+  }
+  else if (sig == SIG_REMOVE_PLATFORM)
+  {
+
+    char buffer[100];
+
+    int len = sprintf(buffer, "Removing a platform\n");
+    write(STDOUT_FILENO, buffer, len);
+    remove_platform();
+  }
+}
+
 /**
- * @brief Initializes the operator's base.
+ * Initializes the operator manager.
  *
- * Initializes the operator's base with 75 max drones, 0 current drones,
- * 1 platform, and two empty passages.
+ * Sets up signal handlers for SIG_ADD_PLATFORM and SIG_REMOVE_PLATFORM
+ * and initializes the state of the operator manager.
  *
- * @return 0 on success.
+ * Returns 1 on failure to set up signal handlers, 0 on success.
  */
 int init()
 {
@@ -19,7 +45,28 @@ int init()
   base.passages[0] = 0;
   base.passages[1] = 0;
 
-  return 0;
+  struct sigaction sa;
+  sa.sa_handler = handle_signal;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_SIGINFO;
+
+  if (sigaction(SIG_ADD_PLATFORM, &sa, NULL) == -1)
+  {
+    perror("Could not set signal handler (SIG_ADD_PLATFORM)");
+    return 1;
+  }
+  if (sigaction(SIG_REMOVE_PLATFORM, &sa, NULL) == -1)
+  {
+    perror("Could not set signal handler (SIG_REMOVE_PLATFORM)");
+    return 1;
+  }
+
+  printf("Operator initialized.\n");
+
+  while (1)
+  {
+    sleep(1);
+  }
 }
 
 /**

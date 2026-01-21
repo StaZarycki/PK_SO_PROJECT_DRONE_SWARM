@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
   struct sigaction sa;
   sa.sa_handler = handle_attack_signal;
   sigemptyset(&sa.sa_mask);
-  sa.sa_flags = 0;
+  sa.sa_flags = SA_SIGINFO;
 
   if (sigaction(SIG_KILL, &sa, NULL) == -1)
   {
