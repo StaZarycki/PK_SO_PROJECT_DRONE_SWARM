@@ -1,8 +1,10 @@
 #pragma once
 
-#define SIG_ADD_PLATFORM 1
-#define SIG_REMOVE_PLATFORM 2
-#define SIG_KILL 3
+#include <signal.h>
+
+#define SIG_ADD_PLATFORM (SIGRTMIN)        // SIGNAL 1
+#define SIG_REMOVE_PLATFORM (SIGRTMIN + 1) // SIGNAL 2
+#define SIG_KILL (SIGRTMIN + 2)            // SIGNAL 3
 
 typedef enum DroneState
 {
