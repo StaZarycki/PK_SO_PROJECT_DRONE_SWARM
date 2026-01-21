@@ -18,10 +18,8 @@ set(COMMON_SOURCES
 add_executable(drone_swarm
     src/main.c
     src/drone_manager.c
-    src/base_manager.c
     src/commander_manager.c
     src/operator_manager.c
-    src/platform_manager.c
     ${COMMON_SOURCES}
 )
 target_include_directories(drone_swarm PRIVATE include)
