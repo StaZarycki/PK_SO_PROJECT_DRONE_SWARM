@@ -6,8 +6,6 @@
 #include <unistd.h>
 #include <signal.h>
 
-#define MAX_BASE_VISITS 5
-
 int drone_id, battery_level, base_visits;
 DroneState current_state;
 
