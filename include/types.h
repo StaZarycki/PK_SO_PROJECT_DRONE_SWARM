@@ -13,6 +13,15 @@
 
 #define MAX_DRONES_TOTAL 1000
 
+#define FTOK_PATH "CMakeLists.txt"
+#define FTOK_PROJ_ID 1
+
+#define SEM_BASE_CAPACITY 0
+#define SEM_PASSAGE_1 1
+#define SEM_PASSAGE_2 2
+#define SEM_SHM_ACCESS 3
+#define SEM_COUNT 4
+
 typedef enum DroneState
 {
   IN_BASE,
