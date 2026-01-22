@@ -11,9 +11,40 @@
 #define RESTOCK_DRONES_TIME 10          // Tk
 #define MAX_BASE_VISITS 5               // X
 
+#define MAX_DRONES_TOTAL 1000
+
 typedef enum DroneState
 {
   IN_BASE,
   IN_PASSAGE,
-  IN_FLIGHT
+  IN_FLIGHT,
+  DESTROYED
 } DroneState;
+
+typedef struct DroneInfo
+{
+  pid_t pid;
+  int id;
+  int battery;
+  int visits;
+  int active; // 1 if alive, 0 if destroyed
+  DroneState state;
+} DroneInfo;
+
+typedef struct BaseState
+{
+  int current_drones;
+  int max_capacity;        // P
+  int total_drones;        // Currently active
+  int target_drone_count;  // Dynamic N
+  int initial_drone_count; // Constant N
+} BaseState;
+
+typedef struct SharedStorage
+{
+  pid_t operator_pid;
+  BaseState base;
+  char last_notification[128];
+  time_t notification_time;
+  DroneInfo drones[MAX_DRONES_TOTAL];
+} SharedStorage;
