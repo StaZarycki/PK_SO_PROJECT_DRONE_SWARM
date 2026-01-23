@@ -22,6 +22,8 @@
 #define SEM_SHM_ACCESS 3
 #define SEM_COUNT 4
 
+#define PASSAGE_CAPACITY 1
+
 typedef enum DroneState
 {
   IN_BASE,
