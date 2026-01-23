@@ -1,41 +1,201 @@
-#include "drone_worker.h"
 #include "types.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/sem.h>
 
-int drone_id, battery_level, base_visits;
-DroneState current_state;
+int drone_id;
+int shm_id;
+int sem_id;
+SharedStorage *shm;
+DroneInfo *my_info;
+
+volatile sig_atomic_t pending_destruction = 0;
+
+void handle_sigterm(int sig)
+{
+  (void)sig;
+  exit(0);
+}
 
 void handle_attack_signal(int sig)
 {
   if (sig == SIG_KILL)
   {
-    char buffer[100];
-
-    if (battery_level < 20)
+    if (my_info && my_info->battery < 20)
     {
-      int len = sprintf(buffer, "Drone %d is ignoring the signal (battery level is too low)\n", drone_id);
-      write(STDOUT_FILENO, buffer, len);
+      lock_sem(sem_id, SEM_SHM_ACCESS);
+      snprintf(shm->last_notification, sizeof(shm->last_notification), "Drone %d ignored kill signal (Battery: %d%%)", drone_id, my_info->battery);
+      shm->notification_time = time(NULL);
+      unlock_sem(sem_id, SEM_SHM_ACCESS);
     }
     else
     {
-      int len = sprintf(buffer, "Drone %d is being destroyed\n", drone_id);
-      write(STDOUT_FILENO, buffer, len);
-      destroy();
+      pending_destruction = 1;
     }
   }
 }
 
+void clean_exit_after_delay()
+{
+  int was_in_base = 0;
+
+  // 1. Mark as DESTROYED
+  lock_sem(sem_id, SEM_SHM_ACCESS);
+  if (my_info->state == IN_BASE)
+    was_in_base = 1;
+
+  my_info->state = DESTROYED;
+  unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+  // 2. Wait for 3 seconds
+  sleep(3);
+
+  // 3. Cleanup and exit
+  lock_sem(sem_id, SEM_SHM_ACCESS);
+
+  if (was_in_base)
+  {
+    shm->base.current_drones--;
+  }
+
+  shm->base.total_drones--;
+  my_info->active = 0;
+
+  unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+  exit(0);
+}
+
 void main_loop()
 {
-  sleep(1);
+  if (pending_destruction)
+    clean_exit_after_delay();
 
-  drain_battery();
-  printf("Drone number %d is working.\n", drone_id);
-  printf("Battery level: %d\n", battery_level);
+  // --- IN BASE ---
+  if (my_info->state == IN_BASE)
+  {
+    // Charge
+    sleep(CHARGE_TIME);
+    if (pending_destruction)
+      clean_exit_after_delay();
+
+    my_info->battery = 100;
+
+    if (my_info->visits >= MAX_BASE_VISITS)
+    {
+      clean_exit_after_delay();
+    }
+
+    // Try to leave
+    int passage = (rand() % 2 == 0) ? SEM_PASSAGE_1 : SEM_PASSAGE_2;
+
+    // Wait for passage (leaving) - should we drain here?
+    // Usually charging happens in base. But if fully charged and waiting?
+    // Let's assume powered in base. Just lock.
+
+    lock_sem(sem_id, passage);
+    if (pending_destruction)
+    {
+      unlock_sem(sem_id, passage);
+      clean_exit_after_delay();
+    }
+
+    lock_sem(sem_id, SEM_SHM_ACCESS);
+    my_info->state = IN_PASSAGE;
+    shm->base.current_drones--;
+    unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+    // Leave base capacity slot (Release P with UNDO)
+    struct sembuf sb = {SEM_BASE_CAPACITY, 1, SEM_UNDO};
+    semop(sem_id, &sb, 1);
+
+    sleep(1); // Passage time
+    if (pending_destruction)
+    {
+      unlock_sem(sem_id, passage);
+      clean_exit_after_delay();
+    }
+
+    unlock_sem(sem_id, passage);
+
+    lock_sem(sem_id, SEM_SHM_ACCESS);
+    my_info->state = IN_FLIGHT;
+    unlock_sem(sem_id, SEM_SHM_ACCESS);
+  }
+
+  if (pending_destruction)
+    clean_exit_after_delay();
+
+  // --- IN FLIGHT ---
+  if (my_info->state == IN_FLIGHT)
+  {
+    // Fly
+    int flight_time = FLIGHT_TIME;
+    // Simulate flying and battery drain
+    for (int t = 0; t < flight_time; ++t)
+    {
+      if (pending_destruction)
+        clean_exit_after_delay();
+      sleep(1);
+      my_info->battery -= 10;
+      if (my_info->battery <= 20)
+        break;
+    }
+
+    if (pending_destruction)
+      clean_exit_after_delay();
+
+    // Removed artificial force to 20
+
+    // Return
+    // Need Base Capacity (Acquire P with UNDO + Drain)
+    lock_sem_with_drain(SEM_BASE_CAPACITY);
+    if (pending_destruction)
+    {
+      struct sembuf sb_release = {SEM_BASE_CAPACITY, 1, SEM_UNDO};
+      semop(sem_id, &sb_release, 1);
+      clean_exit_after_delay();
+    }
+
+    int passage = (rand() % 2 == 0) ? SEM_PASSAGE_1 : SEM_PASSAGE_2;
+
+    // Wait for Passage (Acquire + Drain)
+    lock_sem_with_drain(passage);
+
+    if (pending_destruction)
+    {
+      struct sembuf sb_release = {SEM_BASE_CAPACITY, 1, SEM_UNDO};
+      semop(sem_id, &sb_release, 1);
+      unlock_sem(sem_id, passage);
+      clean_exit_after_delay();
+    }
+
+    lock_sem(sem_id, SEM_SHM_ACCESS);
+    my_info->state = IN_PASSAGE;
+    unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+    sleep(1); // Passage
+    if (pending_destruction)
+    {
+      unlock_sem(sem_id, passage);
+      clean_exit_after_delay();
+    }
+
+    lock_sem(sem_id, SEM_SHM_ACCESS);
+    my_info->state = IN_BASE;
+    my_info->visits++;
+    shm->base.current_drones++;
+    unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+    unlock_sem(sem_id, passage);
+  }
+
+  if (my_info->state == DESTROYED)
+  {
+    clean_exit_after_delay();
+  }
 }
 
 int main(int argc, char *argv[])
@@ -47,87 +207,21 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  struct sigaction sa;
-  sa.sa_handler = handle_attack_signal;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_SIGINFO;
-
-  if (sigaction(SIG_KILL, &sa, NULL) == -1)
-  {
-    perror("Could not set signal handler");
-    return 1;
-  }
-
   drone_id = atoi(argv[1]);
-  battery_level = 100;
-  current_state = IN_BASE;
-  base_visits = 0;
 
-  printf("Spawned drone number %d!\n", drone_id);
+  shm_id = get_shm_id();
+  sem_id = get_sem_id();
+  shm = attach_shm(shm_id);
+  my_info = &shm->drones[drone_id];
+
+  srand(time(NULL) + getpid());
+
+  signal(SIG_KILL, handle_attack_signal);
+  signal(SIGTERM, handle_sigterm);
 
   while (1)
   {
     main_loop();
-  }
-
-  return 0;
-}
-
-/**
- * @brief Immediately terminates the drone worker process.
- *
- * This function will cause the immediate termination of the
- * drone worker process. It should be called when the drone
- * worker should shut down.
- */
-void destroy(void)
-{
-  printf("Drone number %d is being destroyed\n", drone_id);
-
-  exit(0);
-}
-
-/**
- * @brief Set the current state of the drone.
- *
- * @param state The state to set the drone to.
- *
- * Sets the current state of the drone to the given state.
- */
-int set_state(DroneState state)
-{
-  current_state = state;
-
-  if (state == IN_BASE)
-  {
-    if (base_visits++ > MAX_BASE_VISITS)
-    {
-      destroy();
-    }
-  }
-
-  return 0;
-}
-
-/**
- * @brief Drain the drone's battery by 10 percentage points.
- *
- * Decreases the drone's battery level by 10 percentage points. If the
- * battery level drops to 0, the drone is immediately shut down. If
- * the battery level drops to 20 or below, the drone is set to IN_PASSAGE
- * state.
- */
-int drain_battery(void)
-{
-  battery_level -= 10;
-
-  if (battery_level <= 0)
-  {
-    destroy();
-  }
-  else if (battery_level <= 20)
-  {
-    set_state(IN_PASSAGE);
   }
 
   return 0;
