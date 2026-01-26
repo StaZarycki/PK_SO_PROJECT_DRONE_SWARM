@@ -1,127 +1,152 @@
+#define _XOPEN_SOURCE 700
+
 #include "operator_manager.h"
 #include "drone_manager.h"
-
+#include "types.h"
+#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 
-Base base;
+volatile sig_atomic_t add_platform_sig = 0;
+volatile sig_atomic_t remove_platform_sig = 0;
 
-void handle_signal(int sig)
+void handle_op_signal(int sig)
 {
   if (sig == SIG_ADD_PLATFORM)
+    add_platform_sig = 1;
+  if (sig == SIG_REMOVE_PLATFORM)
+    remove_platform_sig = 1;
+}
+
+void add_platform(int sem_id, SharedStorage *shm)
+{
+  // Double Capacity
+  lock_sem(sem_id, SEM_SHM_ACCESS);
+  int old_cap = shm->base.max_capacity;
+  int new_cap = old_cap * 2;
+  if (new_cap > MAX_DRONES_TOTAL)
+    new_cap = MAX_DRONES_TOTAL;
+
+  int added = new_cap - old_cap;
+  shm->base.max_capacity = new_cap;
+
+  // Increase target drone count to 2*N
+  int new_target = shm->base.initial_drone_count * 2;
+  if (new_target > MAX_DRONES_TOTAL)
+    new_target = MAX_DRONES_TOTAL;
+  shm->base.target_drone_count = new_target;
+
+  unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+  // Post semaphore 'added' times
+  struct sembuf sb;
+  sb.sem_num = SEM_BASE_CAPACITY;
+  sb.sem_op = 1;
+  sb.sem_flg = 0;
+  for (int i = 0; i < added; ++i)
+    semop(sem_id, &sb, 1);
+}
+
+void remove_platform(int sem_id, SharedStorage *shm)
+{
+  // Halve Capacity
+  lock_sem(sem_id, SEM_SHM_ACCESS);
+  int old_cap = shm->base.max_capacity;
+  int new_cap = old_cap / 2;
+  if (new_cap < MIN_DRONES)
+    new_cap = MIN_DRONES;
+
+  int removed = old_cap - new_cap;
+  shm->base.max_capacity = new_cap;
+
+  // Halve target drone count
+  int new_target = shm->base.target_drone_count / 2;
+  if (new_target < 2)
+    new_target = 2;
+  shm->base.target_drone_count = new_target;
+
+  unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+  // Wait semaphore 'removed' times
+  struct sembuf sb;
+  sb.sem_num = SEM_BASE_CAPACITY;
+  sb.sem_op = -1;
+  sb.sem_flg = IPC_NOWAIT;
+
+  for (int i = 0; i < removed; ++i)
   {
-    char buffer[100];
-
-    int len = sprintf(buffer, "Adding a platform\n");
-    write(STDOUT_FILENO, buffer, len);
-    add_platform();
-  }
-  else if (sig == SIG_REMOVE_PLATFORM)
-  {
-
-    char buffer[100];
-
-    int len = sprintf(buffer, "Removing a platform\n");
-    write(STDOUT_FILENO, buffer, len);
-    remove_platform();
+    if (semop(sem_id, &sb, 1) == -1)
+    {
+      perror("Failed to decrement");
+    }
   }
 }
 
-/**
- * Initializes the operator manager.
- *
- * Sets up signal handlers for SIG_ADD_PLATFORM and SIG_REMOVE_PLATFORM
- * and initializes the state of the operator manager.
- *
- * Returns 1 on failure to set up signal handlers, 0 on success.
- */
-int init()
+void restock_drones(int sem_id, SharedStorage *shm)
 {
-  base.max_drones = 75;
-  base.current_drones = 0;
-  base.platforms = 1;
-  base.passages[0] = 0;
-  base.passages[1] = 0;
+  lock_sem(sem_id, SEM_SHM_ACCESS);
+  int target = shm->base.target_drone_count;
+  int current_total = shm->base.total_drones;
+  int current_in_base = shm->base.current_drones;
+  int max_in_base = shm->base.max_capacity;
+  unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+  if (current_total < target)
+  {
+    int needed = target - current_total;
+    int space = max_in_base - current_in_base;
+
+    if (space > 0)
+    {
+      int to_spawn = (needed < space) ? needed : space;
+      if (to_spawn > 0)
+      {
+        spawn_drones(to_spawn);
+      }
+    }
+  }
+}
+
+void run_operator(void)
+{
+  setup_sigchld_handler();
+
+  int shm_id = get_shm_id();
+  SharedStorage *shm = attach_shm(shm_id);
+  int sem_id = get_sem_id();
+
+  // Register PID
+  lock_sem(sem_id, SEM_SHM_ACCESS);
+  shm->operator_pid = getpid();
+  unlock_sem(sem_id, SEM_SHM_ACCESS);
 
   struct sigaction sa;
-  sa.sa_handler = handle_signal;
+  sa.sa_handler = handle_op_signal;
   sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_SIGINFO;
+  sa.sa_flags = 0;
+  sigaction(SIG_ADD_PLATFORM, &sa, NULL);
+  sigaction(SIG_REMOVE_PLATFORM, &sa, NULL);
 
-  if (sigaction(SIG_ADD_PLATFORM, &sa, NULL) == -1)
-  {
-    perror("Could not set signal handler (SIG_ADD_PLATFORM)");
-    return 1;
-  }
-  if (sigaction(SIG_REMOVE_PLATFORM, &sa, NULL) == -1)
-  {
-    perror("Could not set signal handler (SIG_REMOVE_PLATFORM)");
-    return 1;
-  }
-
-  printf("Operator initialized.\n");
+  printf("Operator started. PID: %d\n", getpid());
 
   while (1)
   {
-    sleep(1);
+    sleep(RESTOCK_DRONES_TIME);
+
+    if (add_platform_sig)
+    {
+      add_platform_sig = 0;
+      add_platform(sem_id, shm);
+    }
+
+    if (remove_platform_sig)
+    {
+      remove_platform_sig = 0;
+      remove_platform(sem_id, shm);
+    }
+
+    restock_drones(sem_id, shm);
   }
-}
-
-/**
- * @brief Spawn drones to reach the maximum allowed number.
- *
- * Spawns drones until the maximum number of drones allowed by the
- * operator is reached. The number of drones spawned is the difference
- * between the maximum number of drones and the current number of drones.
- *
- * @return 0 on success.
- */
-int add_drones(void)
-{
-  spawn_drones(base.max_drones - base.current_drones);
-
-  return 0;
-}
-
-/**
- * @brief Increase the maximum number of drones that can be controlled by the operator.
- *
- * The maximum number of drones that can be controlled by the operator is
- * doubled.
- *
- * @return 0 on success.
- */
-int add_platform(void)
-{
-  base.max_drones *= 2;
-
-  return 0;
-}
-
-/**
- * @brief Decrease the maximum number of drones that can be controlled by the operator.
- *
- * The maximum number of drones that can be controlled by the operator is
- * halved.
- *
- * @return 0 on success.
- */
-int remove_platform(void)
-{
-  base.max_drones /= 2;
-
-  return 0;
-}
-
-/**
- * @brief Get the status of a passage.
- *
- * @param n 0 or 1, corresponding to the first or second passage.
- * @return 0 if the passage is empty, 1 if it is occupied.
- */
-int check_passage(int n)
-{
-  return base.passages[n];
 }
