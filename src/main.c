@@ -67,6 +67,7 @@ void spawn_processes(int drone_amount)
   if (operator_pid == 0)
   {
     run_operator();
+
     exit(0);
   }
 
