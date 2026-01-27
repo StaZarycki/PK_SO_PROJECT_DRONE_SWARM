@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-
 #include "operator_manager.h"
 #include "drone_manager.h"
 #include "types.h"

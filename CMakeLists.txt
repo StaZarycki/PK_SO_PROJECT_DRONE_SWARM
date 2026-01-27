@@ -4,7 +4,7 @@ project(drone_swarm C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-add_compile_options(-Wall -Wextra -g -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=600)
+add_compile_options(-Wall -Wextra -g -D_DEFAULT_SOURCE -D_GNU_SOURCE)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 

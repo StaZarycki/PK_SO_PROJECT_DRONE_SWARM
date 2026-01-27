@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/types.h>
+#include <time.h>
 #include <signal.h>
 
 #define SIG_ADD_PLATFORM (SIGRTMIN)        // SIGNAL 1

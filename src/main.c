@@ -162,8 +162,6 @@ int main(int argc, char *argv[])
   {
     tb_clear();
     int height = tb_height();
-    int width = tb_width();
-    (void)width;
 
     int header_height = 3;
     int footer_height = 3;

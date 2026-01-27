@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-
 #include "utils.h"
 #include <stdlib.h>
 #include <stdio.h>

@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
-#include <time.h>
 
 void run_commander(int pipe_fd)
 {
