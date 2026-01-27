@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
 
 volatile sig_atomic_t add_platform_sig = 0;
 volatile sig_atomic_t remove_platform_sig = 0;
@@ -22,13 +23,6 @@ void add_platform(int sem_id, SharedStorage *shm)
 {
   // Double Capacity
   lock_sem(sem_id, SEM_SHM_ACCESS);
-  int old_cap = shm->base.max_capacity;
-  int new_cap = old_cap * 2;
-  if (new_cap > MAX_DRONES_TOTAL)
-    new_cap = MAX_DRONES_TOTAL;
-
-  int added = new_cap - old_cap;
-  shm->base.max_capacity = new_cap;
 
   // Increase target drone count (Doubling current, up to max 2*N)
   int new_target = shm->base.target_drone_count * 2;
@@ -40,6 +34,23 @@ void add_platform(int sem_id, SharedStorage *shm)
     new_target = MAX_DRONES_TOTAL;
 
   shm->base.target_drone_count = new_target;
+
+  int old_cap = shm->base.max_capacity;
+  int new_cap;
+  if (new_target == 1)
+  {
+    new_cap = 0;
+  }
+  else
+  {
+    new_cap = (new_target - 1) / 2;
+  }
+
+  if (new_cap > MAX_DRONES_TOTAL)
+    new_cap = MAX_DRONES_TOTAL;
+
+  int added = new_cap - old_cap;
+  shm->base.max_capacity = new_cap;
 
   unlock_sem(sem_id, SEM_SHM_ACCESS);
 
@@ -58,33 +69,79 @@ void remove_platform(int sem_id, SharedStorage *shm)
 {
   // Halve Capacity
   lock_sem(sem_id, SEM_SHM_ACCESS);
+
+  int new_target = shm->base.target_drone_count / 2;
+  if (new_target < MIN_DRONES)
+    new_target = MIN_DRONES;
+  shm->base.target_drone_count = new_target;
+
   int old_cap = shm->base.max_capacity;
-  int new_cap = old_cap / 2;
-  if (new_cap < MIN_DRONES)
-    new_cap = MIN_DRONES;
+  int new_cap;
+  if (new_target == 1)
+  {
+    new_cap = 0;
+  }
+  else
+  {
+    new_cap = (new_target - 1) / 2;
+  }
 
   int removed = old_cap - new_cap;
   shm->base.max_capacity = new_cap;
 
-  // Halve target drone count
-  int new_target = shm->base.target_drone_count / 2;
-  if (new_target < 2)
-    new_target = 2;
-  shm->base.target_drone_count = new_target;
-
   unlock_sem(sem_id, SEM_SHM_ACCESS);
 
-  // Wait semaphore 'removed' times
   struct sembuf sb;
   sb.sem_num = SEM_BASE_CAPACITY;
   sb.sem_op = -1;
   sb.sem_flg = IPC_NOWAIT;
 
+  int pending_removals = 0;
+
   for (int i = 0; i < removed; ++i)
   {
     if (semop(sem_id, &sb, 1) == -1)
     {
-      perror("Failed to decrement");
+      if (errno == EAGAIN)
+      {
+        pending_removals++;
+      }
+      else
+      {
+        perror("Failed to decrement semaphore in remove_platform");
+      }
+    }
+  }
+
+  if (pending_removals > 0)
+  {
+    log_event("Operator: %d slots occupied, starting background removal", pending_removals);
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+      struct sembuf sb_wait;
+      sb_wait.sem_num = SEM_BASE_CAPACITY;
+      sb_wait.sem_op = -1;
+      sb_wait.sem_flg = 0;
+
+      for (int i = 0; i < pending_removals; ++i)
+      {
+        if (semop(sem_id, &sb_wait, 1) == -1)
+        {
+          if (errno == EINTR)
+          {
+            i--;
+            continue;
+          }
+          perror("Helper failed to decrement");
+          exit(1);
+        }
+      }
+      exit(0);
+    }
+    else if (pid < 0)
+    {
+      perror("Failed to fork helper for remove_platform");
     }
   }
 

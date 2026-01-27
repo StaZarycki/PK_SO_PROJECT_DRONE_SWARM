@@ -13,8 +13,8 @@
 #define RESTOCK_DRONES_TIME 10          // Tk
 #define MAX_BASE_VISITS 5               // X
 
-#define MIN_DRONES 2
-#define MAX_DRONES_TOTAL 1000
+#define MIN_DRONES 1
+#define MAX_DRONES_TOTAL 5000
 
 #define FTOK_PATH "CMakeLists.txt"
 #define FTOK_PROJ_ID 1

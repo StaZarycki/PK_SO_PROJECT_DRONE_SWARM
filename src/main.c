@@ -20,9 +20,15 @@ int commander_pipe[2];
 
 int init_semaphores(int drone_amount)
 {
-  int P = drone_amount / 2;
-  if (P < 2)
-    P = 2; // Minimal capacity
+  int P;
+  if (drone_amount == 1)
+  {
+    P = 0;
+  }
+  else
+  {
+    P = (drone_amount - 1) / 2;
+  }
 
   semctl(sem_id, SEM_BASE_CAPACITY, SETVAL, P);
   semctl(sem_id, SEM_PASSAGE_1, SETVAL, PASSAGE_CAPACITY);

@@ -3,10 +3,12 @@
 #include "utils.h"
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/sem.h>
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
 
 /**
  * @brief Spawns a specified number of drones.
@@ -30,6 +32,17 @@ int spawn_drones(int number)
 
   for (int i = 0; i < number; i++)
   {
+    struct sembuf sb = {SEM_BASE_CAPACITY, -1, IPC_NOWAIT};
+    int initial_state = IN_FLIGHT;
+    if (semop(sem_id, &sb, 1) == 0)
+    {
+      initial_state = IN_BASE;
+    }
+    else if (errno != EAGAIN)
+    {
+      perror("semop failed in spawn_drones");
+    }
+
     lock_sem(sem_id, SEM_SHM_ACCESS);
     int slot = -1;
     for (int j = 0; j < MAX_DRONES_TOTAL; ++j)
@@ -41,7 +54,7 @@ int spawn_drones(int number)
         shm->drones[j].id = j;
         shm->drones[j].visits = 0;
         shm->drones[j].battery = 100;
-        shm->drones[j].state = IN_BASE;
+        shm->drones[j].state = initial_state;
         break;
       }
     }
@@ -49,6 +62,12 @@ int spawn_drones(int number)
 
     if (slot == -1)
     {
+      if (initial_state == IN_BASE)
+      {
+        sb.sem_op = 1;
+        sb.sem_flg = 0;
+        semop(sem_id, &sb, 1);
+      }
       return 0;
     }
 
@@ -62,6 +81,13 @@ int spawn_drones(int number)
       lock_sem(sem_id, SEM_SHM_ACCESS);
       shm->drones[slot].active = 0;
       unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+      if (initial_state == IN_BASE)
+      {
+        sb.sem_op = 1;
+        sb.sem_flg = 0;
+        semop(sem_id, &sb, 1);
+      }
 
       return 1;
     }
@@ -80,7 +106,10 @@ int spawn_drones(int number)
     {
       lock_sem(sem_id, SEM_SHM_ACCESS);
       shm->drones[slot].pid = pid;
-      shm->base.current_drones++;
+      if (initial_state == IN_BASE)
+      {
+        shm->base.current_drones++;
+      }
       shm->base.total_drones++;
       unlock_sem(sem_id, SEM_SHM_ACCESS);
     }
