@@ -79,6 +79,45 @@ void spawn_processes(int drone_amount)
   spawn_drones(drone_amount);
 }
 
+void cleanup()
+{
+  SharedStorage *shm = attach_shm(shm_id);
+
+  // 1. Kill Operator and Commander
+  if (operator_pid > 0)
+    kill(operator_pid, SIGTERM);
+  if (commander_pid > 0)
+    kill(commander_pid, SIGTERM);
+
+  // 2. Kill Drones
+  if (shm != (void *)-1)
+  {
+    for (int i = 0; i < MAX_DRONES_TOTAL; ++i)
+    {
+      if (shm->drones[i].active && shm->drones[i].pid > 0)
+      {
+        kill(shm->drones[i].pid, SIGTERM);
+      }
+    }
+  }
+
+  // 3. Wait for cleanup
+  usleep(200000); // 200ms
+
+  // 4. Remove IPC
+  shmctl(shm_id, IPC_RMID, NULL);
+  semctl(sem_id, 0, IPC_RMID);
+
+  tb_shutdown();
+}
+
+void handle_sigint(int sig)
+{
+  (void)sig;
+  cleanup();
+  exit(0);
+}
+
 int main(int argc, char *argv[])
 {
   int drone_amount = 0;
@@ -106,6 +145,9 @@ int main(int argc, char *argv[])
   init_pipe();
 
   spawn_processes(drone_amount);
+
+  signal(SIGINT, handle_sigint);
+  signal(SIGTERM, handle_sigint);
 
   struct tb_event ev;
   tb_init();
@@ -292,5 +334,6 @@ int main(int argc, char *argv[])
     }
   }
 
+  cleanup();
   return 0;
 }
