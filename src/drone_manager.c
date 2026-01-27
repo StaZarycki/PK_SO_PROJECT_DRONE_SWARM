@@ -8,6 +8,19 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+/**
+ * @brief Spawns a specified number of drones.
+ * @param number The number of drones to spawn.
+ * @return 0 on success, 1 on failure.
+ *
+ * This function spawns a specified number of drones. It iterates over the
+ * available slots in the shared memory and marks them as active.
+ * It then forks a new process for each drone and executes the drone_worker
+ * program. The drone's PID is stored in the shared memory.
+ *
+ * If there are no available slots, the function returns 0. If there is an error
+ * while forking or executing the drone_worker program, the function returns 1.
+ */
 int spawn_drones(int number)
 {
   char drone_id_str[10];

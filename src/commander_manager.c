@@ -6,6 +6,16 @@
 #include <unistd.h>
 #include <signal.h>
 
+/**
+ * @brief Runs the commander program, responsible for receiving commands from the user and sending corresponding signals to the operator.
+ * @param pipe_fd The file descriptor of the pipe from which to read commands.
+ * @details The commander program prints a message announcing its start and waits for commands from the user.
+ * It reads commands from the pipe and sends the corresponding signals to the operator.
+ * If the command is 'a', it sends a SIG_ADD_PLATFORM signal to add a platform.
+ * If the command is 'r', it sends a SIG_REMOVE_PLATFORM signal to remove a platform.
+ * If the command is 'k', it sends a SIG_KILL signal to kill a drone.
+ * The commander program exits after finishing reading commands from the pipe.
+ */
 void run_commander(int pipe_fd)
 {
   int shm_id = get_shm_id();

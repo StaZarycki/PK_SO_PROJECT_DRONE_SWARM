@@ -112,6 +112,15 @@ void restock_drones(int sem_id, SharedStorage *shm)
   }
 }
 
+/**
+ * @brief Runs the operator program, responsible for adding and removing platforms, and restocking drones.
+ *
+ * The operator program sets up a signal handler for SIG_ADD_PLATFORM and SIG_REMOVE_PLATFORM signals.
+ * It then enters an infinite loop, where it waits for RESTOCK_DRONES_TIME seconds, checks if any signals have been received, and processes them.
+ * If a ADD PLATFORM signal has been received, it adds a platform.
+ * If a REMOVE PLATFORM signal has been received, it removes a platform.
+ * It then restocks drones if necessary.
+ */
 void run_operator(void)
 {
   setup_sigchld_handler();
