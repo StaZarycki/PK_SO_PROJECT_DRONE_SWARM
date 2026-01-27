@@ -126,14 +126,13 @@ void main_loop()
   if (my_info->state == IN_BASE)
   {
     // Charge
-    // log_event("Drone %d charging", drone_id); // Optional, might be too spammy
     sleep(CHARGE_TIME);
     if (pending_destruction)
       clean_exit_after_delay();
 
     my_info->battery = 100;
 
-    // log_event("Drone %d charged", drone_id);
+    log_event("Drone %d charged", drone_id);
 
     if (my_info->visits >= MAX_BASE_VISITS)
     {
@@ -143,10 +142,6 @@ void main_loop()
 
     // Try to leave
     int passage = (rand() % 2 == 0) ? SEM_PASSAGE_1 : SEM_PASSAGE_2;
-
-    // Wait for passage (leaving) - should we drain here?
-    // Usually charging happens in base. But if fully charged and waiting?
-    // Let's assume powered in base. Just lock.
 
     lock_sem(sem_id, passage);
     if (pending_destruction)
@@ -166,7 +161,7 @@ void main_loop()
 
     log_event("Drone %d leaving base", drone_id);
 
-    sleep(1); // Passage time
+    sleep(1); // Time passage
     if (pending_destruction)
     {
       unlock_sem(sem_id, passage);
@@ -186,10 +181,8 @@ void main_loop()
   // --- IN FLIGHT ---
   if (my_info->state == IN_FLIGHT)
   {
-    // Fly
-    // log_event("Drone %d in flight", drone_id);
     int flight_time = FLIGHT_TIME;
-    // Simulate flying and battery drain
+    // Fly
     for (int t = 0; t < flight_time; ++t)
     {
       if (pending_destruction)
@@ -203,12 +196,9 @@ void main_loop()
     if (pending_destruction)
       clean_exit_after_delay();
 
-    // Removed artificial force to 20
-
     log_event("Drone %d returning to base (Battery: %d%%)", drone_id, my_info->battery);
 
     // Return
-    // Need Base Capacity (Acquire P with UNDO + Drain)
     lock_sem_with_drain(SEM_BASE_CAPACITY);
     if (pending_destruction)
     {
@@ -219,7 +209,7 @@ void main_loop()
 
     int passage = (rand() % 2 == 0) ? SEM_PASSAGE_1 : SEM_PASSAGE_2;
 
-    // Wait for Passage (Acquire + Drain)
+    // Wait for Passage
     lock_sem_with_drain(passage);
 
     if (pending_destruction)
