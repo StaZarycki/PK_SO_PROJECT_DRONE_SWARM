@@ -32,10 +32,12 @@ void handle_attack_signal(int sig)
       snprintf(shm->last_notification, sizeof(shm->last_notification), "Drone %d ignored kill signal (Battery: %d%%)", drone_id, my_info->battery);
       shm->notification_time = time(NULL);
       unlock_sem(sem_id, SEM_SHM_ACCESS);
+      log_event("Drone %d ignored kill signal (Low Battery)", drone_id);
     }
     else
     {
       pending_destruction = 1;
+      log_event("Drone %d accepted kill signal", drone_id);
     }
   }
 }
@@ -51,6 +53,8 @@ void clean_exit_after_delay()
 
   my_info->state = DESTROYED;
   unlock_sem(sem_id, SEM_SHM_ACCESS);
+
+  log_event("Drone %d destroyed", drone_id);
 
   // 2. Wait for 3 seconds
   sleep(3);
@@ -122,14 +126,18 @@ void main_loop()
   if (my_info->state == IN_BASE)
   {
     // Charge
+    // log_event("Drone %d charging", drone_id); // Optional, might be too spammy
     sleep(CHARGE_TIME);
     if (pending_destruction)
       clean_exit_after_delay();
 
     my_info->battery = 100;
 
+    // log_event("Drone %d charged", drone_id);
+
     if (my_info->visits >= MAX_BASE_VISITS)
     {
+      log_event("Drone %d retiring after %d visits", drone_id, my_info->visits);
       clean_exit_after_delay();
     }
 
@@ -156,6 +164,8 @@ void main_loop()
     struct sembuf sb = {SEM_BASE_CAPACITY, 1, SEM_UNDO};
     semop(sem_id, &sb, 1);
 
+    log_event("Drone %d leaving base", drone_id);
+
     sleep(1); // Passage time
     if (pending_destruction)
     {
@@ -177,6 +187,7 @@ void main_loop()
   if (my_info->state == IN_FLIGHT)
   {
     // Fly
+    // log_event("Drone %d in flight", drone_id);
     int flight_time = FLIGHT_TIME;
     // Simulate flying and battery drain
     for (int t = 0; t < flight_time; ++t)
@@ -193,6 +204,8 @@ void main_loop()
       clean_exit_after_delay();
 
     // Removed artificial force to 20
+
+    log_event("Drone %d returning to base (Battery: %d%%)", drone_id, my_info->battery);
 
     // Return
     // Need Base Capacity (Acquire P with UNDO + Drain)
@@ -260,6 +273,8 @@ int main(int argc, char *argv[])
   my_info = &shm->drones[drone_id];
 
   srand(time(NULL) + getpid());
+
+  log_event("Drone %d started", drone_id);
 
   signal(SIG_KILL, handle_attack_signal);
   signal(SIGTERM, handle_sigterm);

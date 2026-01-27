@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/wait.h>
 
 #define DEFAULT_DRONE_AMOUNT 150
 
@@ -27,6 +28,7 @@ int init_semaphores(int drone_amount)
   semctl(sem_id, SEM_PASSAGE_1, SETVAL, PASSAGE_CAPACITY);
   semctl(sem_id, SEM_PASSAGE_2, SETVAL, PASSAGE_CAPACITY);
   semctl(sem_id, SEM_SHM_ACCESS, SETVAL, 1);
+  semctl(sem_id, SEM_LOG_ACCESS, SETVAL, 1);
 
   return P;
 }
@@ -81,6 +83,9 @@ void spawn_processes(int drone_amount)
 
 void cleanup()
 {
+  // Disable SIGCHLD handler to synchronously wait for children
+  signal(SIGCHLD, SIG_DFL);
+
   SharedStorage *shm = attach_shm(shm_id);
 
   // 1. Kill Operator and Commander
@@ -101,8 +106,11 @@ void cleanup()
     }
   }
 
-  // 3. Wait for cleanup
-  usleep(200000); // 200ms
+  // 3. Wait for all children to exit
+  while (wait(NULL) > 0)
+    ;
+
+  log_event("Simulation ended");
 
   // 4. Remove IPC
   shmctl(shm_id, IPC_RMID, NULL);
@@ -145,6 +153,8 @@ int main(int argc, char *argv[])
   init_pipe();
 
   spawn_processes(drone_amount);
+
+  log_event("Simulation started with %d drones", drone_amount);
 
   signal(SIGINT, handle_sigint);
   signal(SIGTERM, handle_sigint);

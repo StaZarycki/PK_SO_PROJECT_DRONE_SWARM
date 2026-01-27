@@ -10,4 +10,5 @@ int get_sem_id(void);
 void lock_sem(int sem_id, int sem_num);
 void unlock_sem(int sem_id, int sem_num);
 void setup_sigchld_handler(void);
+void log_event(const char *fmt, ...);
 SharedStorage *attach_shm(int shm_id);

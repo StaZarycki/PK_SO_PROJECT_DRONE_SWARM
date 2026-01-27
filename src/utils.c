@@ -7,6 +7,8 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <sys/wait.h>
+#include <stdarg.h>
+#include <time.h>
 
 void sigchld_handler(int sig)
 {
@@ -94,4 +96,30 @@ SharedStorage *attach_shm(int shm_id)
   }
 
   return shm;
+}
+
+void log_event(const char *fmt, ...)
+{
+  int sem_id = get_sem_id();
+  lock_sem(sem_id, SEM_LOG_ACCESS);
+
+  FILE *fp = fopen("simulation.log", "a");
+  if (fp)
+  {
+    time_t now = time(NULL);
+    char time_buf[64];
+    strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", localtime(&now));
+
+    fprintf(fp, "[%s] [PID:%d] ", time_buf, getpid());
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(fp, fmt, args);
+    va_end(args);
+
+    fprintf(fp, "\n");
+    fclose(fp);
+  }
+
+  unlock_sem(sem_id, SEM_LOG_ACCESS);
 }

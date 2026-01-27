@@ -23,7 +23,8 @@
 #define SEM_PASSAGE_1 1
 #define SEM_PASSAGE_2 2
 #define SEM_SHM_ACCESS 3
-#define SEM_COUNT 4
+#define SEM_LOG_ACCESS 4
+#define SEM_COUNT 5
 
 #define PASSAGE_CAPACITY 1
 

@@ -45,6 +45,8 @@ void add_platform(int sem_id, SharedStorage *shm)
   sb.sem_flg = 0;
   for (int i = 0; i < added; ++i)
     semop(sem_id, &sb, 1);
+
+  log_event("Operator added platform. New capacity: %d, Target drones: %d", new_cap, new_target);
 }
 
 void remove_platform(int sem_id, SharedStorage *shm)
@@ -80,6 +82,8 @@ void remove_platform(int sem_id, SharedStorage *shm)
       perror("Failed to decrement");
     }
   }
+
+  log_event("Operator removed platform. New capacity: %d, Target drones: %d", new_cap, new_target);
 }
 
 void restock_drones(int sem_id, SharedStorage *shm)
@@ -101,6 +105,7 @@ void restock_drones(int sem_id, SharedStorage *shm)
       int to_spawn = (needed < space) ? needed : space;
       if (to_spawn > 0)
       {
+        log_event("Operator restocking %d drones", to_spawn);
         spawn_drones(to_spawn);
       }
     }

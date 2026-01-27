@@ -21,3 +21,4 @@ compile_commands.json
 .cache/
 
 .cmake-tools.json
+*.log

@@ -22,6 +22,7 @@ void run_commander(int pipe_fd)
       if (shm->operator_pid > 0)
       {
         kill(shm->operator_pid, SIG_ADD_PLATFORM);
+        log_event("Commander sent ADD PLATFORM signal");
       }
     }
     else if (cmd == 'r') // Remove Platform
@@ -29,6 +30,7 @@ void run_commander(int pipe_fd)
       if (shm->operator_pid > 0)
       {
         kill(shm->operator_pid, SIG_REMOVE_PLATFORM);
+        log_event("Commander sent REMOVE PLATFORM signal");
       }
     }
     else if (cmd == 'k') // Kill Drone (Suicide Attack)
@@ -43,6 +45,7 @@ void run_commander(int pipe_fd)
           if (target_pid > 0)
           {
             kill(target_pid, SIG_KILL);
+            log_event("Commander sent KILL signal to Drone %d", target_id);
           }
         }
         unlock_sem(sem_id, SEM_SHM_ACCESS);
