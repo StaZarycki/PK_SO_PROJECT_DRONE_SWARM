@@ -30,10 +30,15 @@ void add_platform(int sem_id, SharedStorage *shm)
   int added = new_cap - old_cap;
   shm->base.max_capacity = new_cap;
 
-  // Increase target drone count to 2*N
-  int new_target = shm->base.initial_drone_count * 2;
+  // Increase target drone count (Doubling current, up to max 2*N)
+  int new_target = shm->base.target_drone_count * 2;
+  int limit = shm->base.initial_drone_count * 2;
+
+  if (new_target > limit)
+    new_target = limit;
   if (new_target > MAX_DRONES_TOTAL)
     new_target = MAX_DRONES_TOTAL;
+
   shm->base.target_drone_count = new_target;
 
   unlock_sem(sem_id, SEM_SHM_ACCESS);
