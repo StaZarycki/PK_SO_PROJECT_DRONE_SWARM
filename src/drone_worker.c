@@ -1,9 +1,13 @@
+#define _GNU_SOURCE
 #include "types.h"
+#include "utils.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
-#include <sys/sem.h>
+#include <time.h>
+#include <errno.h>
 
 int drone_id;
 int shm_id;
@@ -66,6 +70,48 @@ void clean_exit_after_delay()
   unlock_sem(sem_id, SEM_SHM_ACCESS);
 
   exit(0);
+}
+
+void lock_sem_with_drain(int sem_num)
+{
+  while (1)
+  {
+    struct sembuf sb = {sem_num, -1, SEM_UNDO};
+    struct timespec ts = {1, 0}; // 1 second timeout
+
+    if (semtimedop(sem_id, &sb, 1, &ts) == 0)
+    {
+      return;
+    }
+
+    if (errno == EAGAIN)
+    {
+      // Drain battery
+      my_info->battery -= 10;
+
+      if (my_info->battery <= 0)
+      {
+        my_info->battery = 0;
+        clean_exit_after_delay();
+      }
+    }
+    else if (errno == EINTR)
+    {
+      if (pending_destruction)
+        clean_exit_after_delay();
+    }
+    else
+    {
+      if (errno != EIDRM && errno != EINVAL)
+      {
+        perror("semtimedop");
+      }
+      exit(1);
+    }
+
+    if (pending_destruction)
+      clean_exit_after_delay();
+  }
 }
 
 void main_loop()

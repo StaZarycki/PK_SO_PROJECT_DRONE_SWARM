@@ -94,6 +94,8 @@ int main(int argc, char *argv[])
     drone_amount = DEFAULT_DRONE_AMOUNT;
   }
 
+  setup_sigchld_handler();
+
   shm_id = get_shm_id();
   sem_id = get_sem_id();
 
