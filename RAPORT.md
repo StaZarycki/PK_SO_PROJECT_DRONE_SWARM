@@ -13,19 +13,60 @@ Główne założenia symulacji:
 
 Udało się zrealizować w pełni funkcjonalną symulację zgodną z opisem zadania, wzbogaconą o interfejs tekstowy (TUI) wizualizujący stan roju w czasie rzeczywistym.
 
-## 2. Napotkane problemy
+## 2. Architektura
+
+![Architektura](Architektura.jpg)
+
+System został zaprojektowany w architekturze wieloprocesowej, gdzie poszczególne elementy symulacji działają jako niezależne procesy systemowe w systemie Linux. Główny nacisk położono na synchronizację dostępu do zasobów współdzielonych.
+
+**Główne komponenty systemu:**
+
+1.  **Główny Proces (Main / UI)**:
+    - Odpowiada za przygotowanie środowiska: inicjalizację kluczy IPC, alokację pamięci dzielonej oraz utworzenie zestawu semaforów.
+    - Uruchamia procesy zarządcze (Operator, Dowódca) oraz początkową pulę procesów Dronów.
+    - Odpowiada za warstwę prezentacji: cyklicznie odczytuje stan roju z pamięci dzielonej i wyświetla go w terminalu przy użyciu biblioteki `termbox2`.
+    - Obsługuje wejście użytkownika i przekazuje komendy do Dowódcy za pomocą łącza nienazwanego (`pipe`).
+
+2.  **Pamięć Dzielona (System V Shared Memory)**:
+    - Stanowi centralny magazyn danych dostępny dla wszystkich procesów.
+    - Przechowuje:
+      - Tablicę struktur `DroneInfo` (ID, PID, poziom baterii, stan, liczba cykli).
+      - Strukturę `BaseState` (obecna liczba dronów, maksymalna pojemność, docelowa liczebność).
+      - Bufor powiadomień dla interfejsu użytkownika.
+
+3.  **Mechanizmy Synchronizacji (Semafory System V)**:
+    - `SEM_BASE_CAPACITY`: Semafor licznikowy pilnujący, aby w bazie nie przebywało więcej dronów niż wynosi limit $P$.
+    - `SEM_PASSAGE_1` / `SEM_PASSAGE_2`: Semafory binarne symulujące wąskie gardła (wejścia/wyjścia) - zapewniają wyłączny dostęp do śluzy.
+    - `SEM_SHM_ACCESS`: Semafor binarny pełniący rolę muteksu dla operacji zapisu/odczytu w pamięci dzielonej.
+    - `SEM_LOG_ACCESS`: Zapewnia atomowość zapisu do pliku logów przez wiele procesów jednocześnie.
+
+4.  **Operator (Operator Manager)**:
+    - Proces działający w tle, odpowiedzialny za utrzymanie liczebności roju.
+    - Obsługuje sygnały czasu rzeczywistego (`SIGRTMIN`) sterujące dodawaniem lub usuwaniem platform (zmiana pojemności bazy).
+    - Monitoruje liczbę aktywnych dronów i w razie potrzeby tworzy nowe procesy potomne (`fork()`), aby uzupełnić straty.
+
+5.  **Dowódca (Commander Manager)**:
+    - Pełni rolę pośrednika między interfejsem użytkownika a logiką sterowania.
+    - Odbiera znaki sterujące z potoku (`pipe`) i tłumaczy je na odpowiednie sygnały systemowe wysyłane do Operatora (zmiana platform) lub bezpośrednio do Dronów (sygnał ataku `SIGKILL`).
+
+6.  **Drony (Drone Workers)**:
+    - Niezależne procesy realizujące cykl życia pojedynczego drona.
+    - Implementują maszynę stanów: `IN_BASE` (ładowanie) -> `IN_PASSAGE` (wylot) -> `IN_FLIGHT` (rozładowywanie) -> `IN_PASSAGE` (powrót).
+    - Samodzielnie podejmują decyzje o powrocie do bazy (niski stan baterii) lub zakończeniu działania (limit cykli, zniszczenie).
+
+## 3. Napotkane problemy
 
 - **Deadlocki przy zamykaniu**: Początkowo proces czyszczenia (cleanup) usuwał semafory przed zakończeniem wątków/procesów próbujących logować zdarzenia, co prowadziło do zawieszenia się aplikacji przy wyjściu. Rozwiązano to poprzez synchroniczne oczekiwanie na zakończenie wszystkich procesów potomnych (`wait()`) przed usunięciem zasobów IPC.
 - **Synchronizacja logowania**: Wymagane było stworzenie bezpiecznego wątkowo mechanizmu logowania do pliku, aby procesy nie nadpisywały swoich komunikatów. Zastosowano dedykowany semafor `SEM_LOG_ACCESS`.
 - **Obsługa sygnałów**: Konieczne było precyzyjne zdefiniowanie zachowania procesów na sygnały `SIGRTMIN` (dodawanie/usuwanie platform), aby uniknąć błędów przy modyfikacji pojemności bazy w trakcie działania symulacji.
 
-## 3. Elementy specjalne i dodatkowe
+## 4. Elementy specjalne i dodatkowe
 
 - **Interfejs TUI**: Zastosowano bibliotekę `termbox2` do stworzenia czytelnego interfejsu w terminalu, pokazującego listę dronów, ich stan (bateria, aktywność), oraz status bazy.
 - **System logowania**: Wszystkie kluczowe zdarzenia (start, lądowanie, ataki, zmiany konfiguracji) są zapisywane w pliku `simulation.log` z dokładnymi znacznikami czasu.
 - **Dynamiczne zarządzanie**: Możliwość interaktywnego dodawania/usuwania platform oraz wysyłania rozkazów ataku za pomocą klawiatury w trakcie trwania symulacji.
 
-## 4. Przeprowadzone Testy
+## 6. Przeprowadzone Testy
 
 Zgodnie z wymaganiami przeprowadzono serię testów weryfikujących poprawność działania symulacji.
 
@@ -59,7 +100,7 @@ Zgodnie z wymaganiami przeprowadzono serię testów weryfikujących poprawność
 - **Przebieg**: Użyto klawiszy 'a' (add) i 'r' (remove).
 - **Wynik**: Klawisz 'a' podwoił pojemność bazy i docelową liczbę dronów. Klawisz 'r' zmniejszył pojemność o połowę. Logi potwierdziły zmianę wartości semafora pojemności.
 
-## 5. Linki do istotnych fragmentów kodu
+## 6. Linki do istotnych fragmentów kodu
 
 Poniżej znajdują się odnośniki do fragmentów kodu realizujących wymagane mechanizmy systemowe (zgodnie z punktem 5.2 wymagań).
 
