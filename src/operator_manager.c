@@ -133,6 +133,10 @@ void remove_platform(int sem_id, SharedStorage *shm)
             i--;
             continue;
           }
+          if (errno == EIDRM || errno == EINVAL)
+          {
+            exit(0);
+          }
           perror("Helper failed to decrement");
           exit(1);
         }
